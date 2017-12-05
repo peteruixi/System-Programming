@@ -25,8 +25,9 @@
 /****DEFINING FUNCTIONS*********/
 void print_heap();
 void *find_fit (size_t size);
-void *best_fit (size_t size);
-
+void split();
+void coalesce();
+/*******DEFINING STRUCT********/
 typedef struct footer blockFdr;
 struct footer{
   size_t size;
@@ -38,8 +39,7 @@ struct header{
   blockHdr *next;
   blockHdr *prior;
 };
-void split();
-void coalesce();
+
 
 /*
  * mm_init - initialize the malloc package.
