@@ -20,17 +20,18 @@
 #define Blk_Hdr_Size (ALIGN(sizeof(blockHdr)))
 #define Blk_Fdr_Size (ALIGN(sizeof(blockFdr)))
 #define Free_Blk_Size (ALIGN(sizeof(blockHdr)+sizeof(blockFdr)))
-#define Min_Size 32
-
+#define Min_Size 32 // For split purpose
 
 /****DEFINING FUNCTIONS*********/
 void print_heap();
 void *find_fit (size_t size);
 void *best_fit (size_t size);
+
 typedef struct footer blockFdr;
 struct footer{
   size_t size;
  };
+
 typedef struct header blockHdr;
 struct header{
   size_t size;
@@ -51,9 +52,8 @@ int mm_init(void)
   p->next = p;
   p->prior = p;
   //initiate footer
-  blockFdr *fp = (blockFdr*)((char*)p+Blk_Hdr_Size);
+  blockFdr *fp = (blockFdr*)( (char*)p + Blk_Hdr_Size);
   fp->size = Free_Blk_Size;
-
   return 0;
 }
 
@@ -83,43 +83,43 @@ void *mm_malloc(size_t size)
   // blockHdr *bp =NULL;
   if (size <=0)  return NULL;
   //else if (newsize==4095) newsize=8190;
-    blockHdr *bp =find_fit(newsize);
+  blockHdr *bp = find_fit(newsize);
   blockFdr *fp = NULL;
   if (bp == NULL  ) {
     //Did not find the right size
-    bp = mem_sbrk(newsize);
+    bp = mem_sbrk(newsize); // low level malloc
 
-    if ((long)bp == -1){
+    if ( (long)bp == -1 ){
       return NULL;
-    }
+    } // error exception
     else {
-      //new block maded
+      //new block allocated
       bp-> size = newsize|1;
-      fp = (blockFdr*) ((char*)bp +newsize - Blk_Fdr_Size);
+      fp = (blockFdr*) ((char*)bp + newsize - Blk_Fdr_Size);
       fp -> size = newsize |1;
     }
   }
   else {
-    if (bp->size > 2*newsize){
-      split (bp,fp,newsize);
+    if ( bp->size > 2*newsize ){
+      split (bp,fp,newsize); // hardcode?
     }
 
     else{
-      fp = (blockFdr*) ((char*)bp +bp-> size - Blk_Fdr_Size);
+      fp = (blockFdr*) ((char*)bp + bp->size - Blk_Fdr_Size);
       fp -> size |=1;
-
       //find fit found a size block;
       bp-> size |=1;
+      // Get rid of current free_block
       bp->prior -> next = bp->next;
       bp->next ->prior = bp->prior;
     }
   }
 
-
   return (void * ) ((char *) bp + Blk_Hdr_Size) ;
 
 }
 
+// newsize is required_payload + sizeof(headrer) + sizeof(footer)
 void split(blockHdr* bp, blockFdr* fp,  size_t newsize){
 
   size_t freespace =  bp->size - newsize;
@@ -127,9 +127,9 @@ void split(blockHdr* bp, blockFdr* fp,  size_t newsize){
   blockFdr* freefoot = NULL;
 
   freehead = (blockHdr*) ((char*)bp + newsize);
-  freehead->size=freespace &~1;
-  freefoot = (blockFdr*) ((char*)freehead + freespace-Blk_Fdr_Size);
-  freefoot->size=freespace &~1;
+  freehead->size= freespace & ~1;
+  freefoot = (blockFdr*) ((char*)freehead + freespace - Blk_Fdr_Size);
+  freefoot->size = freespace & ~1;
 
   fp =(blockFdr*) ((char*)freehead - Blk_Fdr_Size);
   fp->size = newsize|1;
@@ -143,7 +143,6 @@ void split(blockHdr* bp, blockFdr* fp,  size_t newsize){
   freehead -> prior = p;
   p->next = freehead;
   freehead->next->prior = freehead;
-
 
 }
 
@@ -163,24 +162,6 @@ void *find_fit (size_t size)
   }
 }
 
-void *best_fit (size_t size)
-{
-  blockHdr* p = NULL ;
-  //blockHdr *n;
-  size_t  si_diff = p->size - size;
-  for (p = ((blockHdr *)mem_heap_lo())-> next;
-       p != mem_heap_lo() && si_diff < size;
-       p = p->next);
-  if(p != mem_heap_lo())
-    {
-      //n=p->next;
-      //coalesce(n);
-      return p;
-    }
-  else {
-    return NULL;
-  }
-}
 /*
  * mm_free - Freeing a block does nothing.
  */
@@ -188,16 +169,15 @@ void mm_free(void *ptr)
 {
   blockHdr *bp = ptr - Blk_Hdr_Size;
   blockHdr *head = mem_heap_lo();
-  bp-> size &= ~1;
-  bp -> next = head->next;
-  bp-> prior = head;
-  head-> next = bp;
-  bp -> next->prior = bp;
+  bp->size &= ~1;
+  bp->next = head->next;
+  bp->prior = head;
+  head->next = bp;
+  bp ->next->prior = bp;
   // coalesce()+ append back to the list  ;
-  blockFdr *fp = (blockFdr*) ((char*)bp +bp->size-Blk_Fdr_Size);
+  blockFdr *fp = (blockFdr*) ((char*)bp +bp->size - Blk_Fdr_Size);
   fp->size &= ~1;
   coalesce(bp);
-
 }
 
 /*
@@ -259,22 +239,9 @@ void coalesce (blockHdr* bp) {
  */
 void *mm_realloc(void *ptr, size_t size)
 {
-  /*
-  blockHdr *bp = ptr-Blk_Hdr_Size;
-  void *newptr = mm_malloc(size);
-  if (newptr == NULL)
-    return NULL;
-  int copySize = bp->size-Blk_Hdr_Size;
-  if (size < copySize)
-    copySize = size;
-  memcpy(newptr, ptr, copySize);
-  mm_free(ptr);
-  return newptr;*/
-
-
-  blockHdr *bp = ptr-Blk_Hdr_Size;
+  blockHdr *bp = ptr - Blk_Hdr_Size;
   void *newptr = NULL;
-  size_t _size = ALIGN(size+Free_Blk_Size);
+  size_t _size = ALIGN(size + Free_Blk_Size);
   size_t oldsize = bp->size;
   if(_size ==0){
     mm_free(ptr);
